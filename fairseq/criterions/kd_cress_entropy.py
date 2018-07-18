@@ -6,24 +6,30 @@
 # can be found in the PATENTS file in the same directory.
 
 import math
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 from fairseq import utils
 
 from . import FairseqCriterion, register_criterion
 
 
-@register_criterion('label_smoothed_cross_entropy')
-class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
+@register_criterion('kd_cross_entropy')
+class KnowledgeDistillationCrossEntropyCriterion(FairseqCriterion):
 
     def __init__(self, args, task):
         super().__init__(args, task)
-        self.eps = args.label_smoothing
+        self.T = args.kd_temperature
+        self.alpha = args.kd_trade_off
 
     @staticmethod
     def add_args(parser):
         """Add criterion-specific arguments to the parser."""
-        parser.add_argument('--label-smoothing', default=0., type=float, metavar='D',
-                            help='epsilon for label smoothing, 0 means no label smoothing')
+        parser.add_argument('--kd-temperature', default=1., type=float, metavar='T',
+                            help='the temperature acting in softmax computation during KD process')
+        parser.add_argument('--kd-trade-off', default=1., type=float, metavar='A',
+                            help='the trade-off parameter between kd loss and ce loss')
 
     def forward(self, model, sample, reduce=True, teacher_outputs=None):
         """Compute the loss for the given sample.
@@ -33,18 +39,24 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
-        net_output = model(**sample['net_input']) #B x T x V
-        lprobs = model.get_normalized_probs(net_output, log_probs=True) #B x T x V
-        lprobs = lprobs.view(-1, lprobs.size(-1)) # BT x V
-        target = model.get_targets(sample, net_output).view(-1, 1) #BT x 1, before view: B x T
-        non_pad_mask = target.ne(self.padding_idx) # BT x 1
-        nll_loss = -lprobs.gather(dim=-1, index=target)[non_pad_mask] #BT
-        smooth_loss = -lprobs.sum(dim=-1, keepdim=True)[non_pad_mask]
+        net_output = model(**sample['net_input'])
+        lprobs = model.get_normalized_probs(net_output, log_probs=True)
+        lprobs = lprobs.view(-1, lprobs.size(-1))
+        target = model.get_targets(sample, net_output).view(-1, 1)
+        if teacher_outputs:
+            assert torch.equal(target.size(), teacher_outputs.size())
+
+        non_pad_mask = target.ne(self.padding_idx)
+        nll_loss = -lprobs.gather(dim=-1, index=target)[non_pad_mask]
+
+        teacher_lprobs = F.softmax(teacher_outputs[0]/self.T, dim=-1)
+        teacher_lprobs = teacher_lprobs.view(-1, teacher_lprobs.size(-1))
+        kd_loss = nn.KLDivLoss()(lprobs, teacher_lprobs)[non_pad_mask]
+
         if reduce:
             nll_loss = nll_loss.sum()
-            smooth_loss = smooth_loss.sum()
-        eps_i = self.eps / lprobs.size(-1)
-        loss = (1. - self.eps) * nll_loss + eps_i * smooth_loss
+            kd_loss= kd_loss.sum()
+        loss = (1. - self.alpha) * nll_loss + self.alpha * self.T * self.T * kd_loss
 
         sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
         logging_output = {

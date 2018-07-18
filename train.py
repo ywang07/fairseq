@@ -12,7 +12,7 @@ import os
 import math
 import torch
 
-from fairseq import data, distributed_utils, options, progress_bar, tasks, utils
+from fairseq import data, distributed_utils, options, tasks, utils
 from fairseq.fp16_trainer import FP16Trainer
 from fairseq.trainer import Trainer
 from fairseq.meters import AverageMeter, StopwatchMeter
@@ -104,7 +104,9 @@ def train(args, trainer, task, epoch_itr):
 
     # Initialize data iterator
     itr = epoch_itr.next_epoch_itr()
-    progress = progress_bar.build_progress_bar(args, itr, epoch_itr.epoch, no_progress_bar='simple')
+    if not args.no_progress_bar:
+        from fairseq import progress_bar
+        progress = progress_bar.build_progress_bar(args, itr, epoch_itr.epoch, no_progress_bar='simple')
 
     # update parameters every N batches
     if epoch_itr.epoch <= len(args.update_freq):
@@ -116,7 +118,9 @@ def train(args, trainer, task, epoch_itr):
     first_valid = args.valid_subset.split(',')[0]
     max_update = args.max_update or math.inf
     num_batches = len(epoch_itr)
-    for i, sample in enumerate(progress, start=epoch_itr.iterations_in_epoch):
+    for i, sample in enumerate(itr if args.no_progress_bar else progress, start=epoch_itr.iterations_in_epoch):
+        if args.lr_scheduler == 'cosine' and trainer.is_cosine_local_sharpness() and trainer.get_cosine_cyle() >= args.start_ensemble_training_cycle:
+            trainer.prev_teacher_models = prepare_cycle_kd_models(args, trainer, task)
         if i < num_batches - 1 and (i + 1) % update_freq > 0:
             # buffer updates according to --update-freq
             trainer.train_step(sample, update_params=False)
@@ -134,7 +138,10 @@ def train(args, trainer, task, epoch_itr):
             else:
                 extra_meters[k].update(v)
             stats[k] = extra_meters[k].avg
-        progress.log(stats)
+        if args.no_progress_bar:
+            print(stats)
+        else:
+            progress.log(stats)
 
         # ignore the first mini-batch in words-per-second calculation
         if i == 0:
@@ -145,6 +152,10 @@ def train(args, trainer, task, epoch_itr):
             valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
             save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
+        if args.lr_scheduler == 'cosine' and trainer.is_cosine_local_sharpness():
+            valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
+            save_cosine_sharp_checkpoint(args, trainer, epoch_itr, valid_losses[0])
+
         if num_updates >= max_update:
             break
 
@@ -152,7 +163,10 @@ def train(args, trainer, task, epoch_itr):
     stats = get_training_stats(trainer)
     for k, meter in extra_meters.items():
         stats[k] = meter.avg
-    progress.print(stats)
+    if args.no_progress_bar:
+        print(stats)
+    else:
+        progress.log(stats)
 
     # reset training meters
     for k in ['train_loss', 'train_nll_loss', 'wps', 'ups', 'wpb', 'bsz', 'clip']:
@@ -201,11 +215,13 @@ def validate(args, trainer, task, epoch_itr, subsets):
             num_shards=args.distributed_world_size,
             shard_id=args.distributed_rank,
         ).next_epoch_itr(shuffle=False)
-        progress = progress_bar.build_progress_bar(
-            args, itr, epoch_itr.epoch,
-            prefix='valid on \'{}\' subset'.format(subset),
-            no_progress_bar='simple'
-        )
+        if not args.no_progress_bar:
+            from fairseq import progress_bar
+            progress = progress_bar.build_progress_bar(
+                args, itr, epoch_itr.epoch,
+                prefix='valid on \'{}\' subset'.format(subset),
+                no_progress_bar='simple'
+            )
 
         # reset validation loss meters
         for k in ['valid_loss', 'valid_nll_loss']:
@@ -214,7 +230,7 @@ def validate(args, trainer, task, epoch_itr, subsets):
                 meter.reset()
         extra_meters = collections.defaultdict(lambda: AverageMeter())
 
-        for sample in progress:
+        for sample in (itr if args.no_progress_bar else progress):
             log_output = trainer.valid_step(sample)
 
             for k, v in log_output.items():
@@ -226,7 +242,10 @@ def validate(args, trainer, task, epoch_itr, subsets):
         stats = get_valid_stats(trainer)
         for k, meter in extra_meters.items():
             stats[k] = meter.avg
-        progress.print(stats)
+        if args.no_progress_bar:
+            print(stats)
+        else:
+            progress.log(stats)
 
         valid_losses.append(stats['valid_loss'])
     return valid_losses
@@ -253,6 +272,18 @@ def get_perplexity(loss):
     except OverflowError:
         return float('inf')
 
+def save_cosine_sharp_checkpoint(args, trainer, epoch_itr, val_loss):
+    prev_best = getattr(save_checkpoint, 'best', val_loss)
+    if val_loss is not None:
+        save_checkpoint.best = min(val_loss, prev_best)
+    extra_state = {
+        'best': save_checkpoint.best,
+        'train_iterator': epoch_itr.state_dict(),
+        'val_loss': val_loss,
+    }
+
+    checkpoint = os.path.join(args.save_dir, 'checkpoint_cycle_{}.pt'.format(trainer.get_cosine_cyle()))
+    trainer.save_checkpoint(checkpoint, extra_state)
 
 def save_checkpoint(args, trainer, epoch_itr, val_loss):
     if args.no_save or not distributed_utils.is_master(args):
@@ -329,17 +360,28 @@ def load_dataset_splits(args, task, splits):
                 raise e
 
 
+def prepare_cycle_kd_models(args, trainer, task):
+    teacher_models = {}
+    curr_cycle = trainer.get_cosine_cyle()
+    for cycle_idx in range(curr_cycle):
+        model = task.build_model(args)
+        checkpoint_path = os.path.join(args.save_dir, 'checkpoint_cycle_{}.pt'.format(cycle_idx))
+        utils.load_model_state(checkpoint_path, model)
+        teacher_models['checkpoint_cycle_{}'.format(cycle_idx)] = model
+    return teacher_models
+
 if __name__ == '__main__':
     parser = options.get_training_parser()
     args = options.parse_args_and_arch(parser)
 
     if args.distributed_port > 0 or args.distributed_init_method is not None:
         from distributed_train import main as distributed_main
-
+        print('Distributed train')
         distributed_main(args)
     elif args.distributed_world_size > 1:
         from multiprocessing_train import main as multiprocessing_main
-
+        print('Multi process train')
         multiprocessing_main(args)
     else:
+        print('Single process training')
         main(args)

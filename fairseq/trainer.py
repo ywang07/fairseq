@@ -61,6 +61,9 @@ class Trainer(object):
         self._optim_history = None
         self._optimizer = None
 
+        self.prev_teacher_models = None #used as the models to perform kd training
+
+
     @property
     def optimizer(self):
         if self._optimizer is None:
@@ -191,10 +194,17 @@ class Trainer(object):
         }
         oom = 0
         if sample is not None:
+            teacher_outputs = None
+            if self.prev_teacher_models: #conduct joint kd and ce loss training
+                net_outputs = []
+                for model in self.prev_teacher_models:
+                    net_outputs.append(model(**sample['net_input'])[0])
+                teacher_outputs = sum(net_outputs)
+                teacher_outputs /= len(self.prev_teacher_models)
             try:
                 with torch.no_grad() if eval else contextlib.ExitStack():
                     # calculate loss and sample size
-                    loss, sample_size, logging_output_ = self.task.get_loss(self.model, self.criterion, sample)
+                    loss, sample_size, logging_output_ = self.task.get_loss(self.model, self.criterion, sample, teacher_outputs=teacher_outputs)
                     logging_output.update(logging_output_)
             except RuntimeError as e:
                 if not eval and 'out of memory' in str(e):
@@ -343,7 +353,15 @@ class Trainer(object):
         """Get the number of parameters updates."""
         return self._num_updates
 
+    def get_cosine_cyle(self):
+        return self.lr_scheduler.cosine_cycle(self._num_updates)
+
+    def is_cosine_local_sharpness(self):
+        curr_cycle = self.lr_scheduler.cosine_cycle(self._num_updates)
+        return  curr_cycle != -1 and curr_cycle + 1 == self.lr_scheduler.cosine_cycle(self._num_updates + 1)
+
     def _prepare_sample(self, sample):
         if sample is None or len(sample) == 0:
             return None
         return utils.move_to_cuda(sample)
+

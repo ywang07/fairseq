@@ -19,7 +19,7 @@ class CrossEntropyCriterion(FairseqCriterion):
     def __init__(self, args, task):
         super().__init__(args, task)
 
-    def forward(self, model, sample, reduce=True):
+    def forward(self, model, sample, reduce=True, teacher_outputs=None):
         """Compute the loss for the given sample.
 
         Returns a tuple with three elements:

@@ -45,8 +45,8 @@ class FairseqTask(object):
     def build_criterion(self, args):
         return criterions.build_criterion(args, self)
 
-    def get_loss(self, model, criterion, sample):
-        return criterion(model, sample)
+    def get_loss(self, model, criterion, sample, teacher_outputs=None):
+        return criterion(model, sample, reduce=True, teacher_outputs=teacher_outputs)
 
     @property
     def source_dictionary(self):

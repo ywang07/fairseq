@@ -119,8 +119,6 @@ def train(args, trainer, task, epoch_itr):
     max_update = args.max_update or math.inf
     num_batches = len(epoch_itr)
     for i, sample in enumerate(itr if args.no_progress_bar else progress, start=epoch_itr.iterations_in_epoch):
-        if args.lr_scheduler == 'cosine' and trainer.is_cosine_local_sharpness() and trainer.get_cosine_cyle() >= args.start_ensemble_training_cycle:
-            trainer.prev_teacher_models = prepare_cycle_kd_models(args, trainer, task)
         if i < num_batches - 1 and (i + 1) % update_freq > 0:
             # buffer updates according to --update-freq
             trainer.train_step(sample, update_params=False)
@@ -152,7 +150,11 @@ def train(args, trainer, task, epoch_itr):
             valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
             save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
-        if args.lr_scheduler == 'cosine' and trainer.is_cosine_local_sharpness():
+        is_cosine_sharpness = args.lr_scheduler == 'cosine' and trainer.is_cosine_local_sharpness()
+        if is_cosine_sharpness and trainer.get_cosine_cyle() >= args.start_ensemble_training_cycle:
+            trainer.prev_teacher_models = prepare_cycle_kd_models(args, trainer, task)
+
+        if is_cosine_sharpness:
             valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
             save_cosine_sharp_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
@@ -363,11 +365,14 @@ def load_dataset_splits(args, task, splits):
 def prepare_cycle_kd_models(args, trainer, task):
     teacher_models = {}
     curr_cycle = trainer.get_cosine_cyle()
+    print('Begin to load previous {} sharp ckpts'.format(curr_cycle))
     for cycle_idx in range(curr_cycle):
         model = task.build_model(args)
         checkpoint_path = os.path.join(args.save_dir, 'checkpoint_cycle_{}.pt'.format(cycle_idx))
         utils.load_model_state(checkpoint_path, model)
+        model.cuda()
         teacher_models['checkpoint_cycle_{}'.format(cycle_idx)] = model
+    print('Done')
     return teacher_models
 
 if __name__ == '__main__':

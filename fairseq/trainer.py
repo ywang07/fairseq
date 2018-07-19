@@ -197,8 +197,10 @@ class Trainer(object):
             teacher_outputs = None
             if self.prev_teacher_models: #conduct joint kd and ce loss training
                 net_outputs = []
-                for model in self.prev_teacher_models:
-                    net_outputs.append(model(**sample['net_input'])[0])
+                for (model_name, model) in self.prev_teacher_models.items():
+                    model.eval()
+                    with torch.no_grad():
+                        net_outputs.append(model(**sample['net_input'])[0])
                 teacher_outputs = sum(net_outputs)
                 teacher_outputs /= len(self.prev_teacher_models)
             try:
@@ -358,7 +360,8 @@ class Trainer(object):
 
     def is_cosine_local_sharpness(self):
         curr_cycle = self.lr_scheduler.cosine_cycle(self._num_updates)
-        return  curr_cycle != -1 and curr_cycle + 1 == self.lr_scheduler.cosine_cycle(self._num_updates + 1)
+        next_cycle = self.lr_scheduler.cosine_cycle(self._num_updates + 1)
+        return  curr_cycle != -1 and curr_cycle + 1 == next_cycle
 
     def _prepare_sample(self, sample):
         if sample is None or len(sample) == 0:

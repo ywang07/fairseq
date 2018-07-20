@@ -26,12 +26,14 @@ def get_training_parser(default_task='translation'):
     return parser
 
 
-def get_generation_parser(interactive=False, default_task='translation'):
+def get_generation_parser(interactive=False, seq=False, default_task='translation'):
     parser = get_parser('Generation', default_task)
     add_dataset_args(parser, gen=True)
     add_generation_args(parser)
     if interactive:
         add_interactive_args(parser)
+    if seq:
+        add_seqtrans_args(parser)
     return parser
 
 
@@ -237,7 +239,7 @@ def add_checkpoint_args(parser):
 
 
 def add_common_eval_args(group):
-    group.add_argument('--path', metavar='FILE',
+    group.add_argument('--path', default=None, metavar='FILE',
                        help='path(s) to model file(s), colon separated')
     group.add_argument('--remove-bpe', nargs='?', const='@@ ', default=None,
                        help='remove BPE tokens before scoring')
@@ -300,6 +302,12 @@ def add_interactive_args(parser):
     group.add_argument('--buffer-size', default=0, type=int, metavar='N',
                        help='read this many sentences into a buffer before processing them')
 
+def add_seqtrans_args(parser):
+    group = parser.add_argument_group('Seqtrans')
+    group.add_argument('--ckpt-dir', metavar='PATH',
+                       help='path(s) to model file(s), colon separated')
+    group.add_argument('--initial-model', default=None, metavar='FILE',
+                       help='The first model to be tested')
 
 def add_model_args(parser):
     group = parser.add_argument_group('Model configuration')

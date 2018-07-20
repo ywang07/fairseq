@@ -23,14 +23,16 @@ def main(args):
 
     if args.max_tokens is None and args.max_sentences is None:
         args.max_tokens = 12000
-    print(args)
+    if not args.quiet:
+        print(args)
 
     use_cuda = torch.cuda.is_available() and not args.cpu
 
     # Load dataset splits
     task = tasks.setup_task(args)
     task.load_dataset(args.gen_subset)
-    print('| {} {} {} examples'.format(args.data, args.gen_subset, len(task.dataset(args.gen_subset))))
+    if not args.quiet:
+        print('| {} {} {} examples'.format(args.data, args.gen_subset, len(task.dataset(args.gen_subset))))
 
     # Set dictionaries
     src_dict = task.source_dictionary

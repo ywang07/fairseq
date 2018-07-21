@@ -24,7 +24,7 @@ def main(args):
             if file == initial_model:
                 start_idx = idx
 
-    bleu_ptn = 'BLEU4\s=\s([\d\.]+?,)'
+    bleu_ptn = 'BLEU4\s=\s([\d\.]+?),'
     for x in range(start_idx, len(files)):
         ckpt_file = files[x]
         args.path = ckpt_file
@@ -35,10 +35,11 @@ def main(args):
             shell=True,
             stdout=subprocess.PIPE)
         pl_output = pl_process.stdout.read()
+        print(type(pl_output), str(pl_output))
         bleu_match = re.search(bleu_ptn, pl_output)
         if bleu_match:
             bleu_score = bleu_match.group(1)
-            print(bleu_score)
+            print(ckpt_file, bleu_score)
         time.sleep(15)
 
 if __name__ == '__main__':

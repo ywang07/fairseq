@@ -10,4 +10,4 @@ CUDA_VISIBLE_DEVICES=0 python train.py /home/fetia/transformer_pytorch/Transform
 	--arch $ARCH --save-dir /home/fetia/ckpts/$model/$PROBLEM/${ARCH}_${SETTING} \
 	--criterion label_smoothed_cross_entropy --label-smoothing 0.1 \
 	--lr-scheduler inverse_sqrt --optimizer adam --adam-betas '(0.9, 0.98)' --lr 0.001 --warmup-init-lr 1e-07 \
-	--warmup-updates 4000 --max-update 300000
+	--warmup-updates 4000 --max-update 300000 | tee $./log/${model}_${PROBLEM}_${ARCH}_${SETTING}.txt

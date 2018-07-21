@@ -1,0 +1,1 @@
+python seq_translate.py /home/fetia/transformer_pytorch/Transformer-PyTorch-master/data-bin/iwslt14.tokenized.de-en --ckpt-dir /home/fetia/ckpts/transformer/IWSLT14_DEEN/$1 --batch-size 128 --beam 5 --lenpen 1.0 --quiet --remove-bpe

@@ -36,7 +36,7 @@ def main(args):
             stdout=subprocess.PIPE)
         pl_output = pl_process.stdout.read()
         print(type(pl_output), str(pl_output))
-        bleu_match = re.search(bleu_ptn, pl_output)
+        bleu_match = re.search(bleu_ptn, str(pl_output))
         if bleu_match:
             bleu_score = bleu_match.group(1)
             print(ckpt_file, bleu_score)

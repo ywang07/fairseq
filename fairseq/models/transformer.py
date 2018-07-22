@@ -463,6 +463,12 @@ def transformer_iwslt_de_en_L6(args):
     args.decoder_layers = getattr(args, 'decoder_layers', 6)
     transformer_iwslt_de_en_L4(args)
 
+@register_model_architecture('transformer', 'transformer_iwslt_de_en_L8')
+def transformer_iwslt_de_en_L8(args):
+    args.encoder_layers = getattr(args, 'encoder_layers', 8)
+    args.decoder_layers = getattr(args, 'decoder_layers', 8)
+    transformer_iwslt_de_en_L4(args)
+
 @register_model_architecture('transformer', 'transformer_wmt_en_de')
 def transformer_wmt_en_de(args):
     base_architecture(args)

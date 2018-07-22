@@ -1,0 +1,1 @@
+python seq_translate.py F:\Data_Models\NMT\iwslt14.tokenized.de-en --ckpt-dir ../../../Data_Models\NMT\ckpts\IWSLT14_DE_EN_UP8 --batch-size 128 --beam 5 --lenpen 1.2 --quiet --remove-bpe

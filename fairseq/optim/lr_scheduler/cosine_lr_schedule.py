@@ -59,8 +59,6 @@ class CosineSchedule(FairseqLRScheduler):
                             help='initial learning rate during warmup phase; default is args.lr')
         parser.add_argument('--cosine-cycle-steps', default=30000, type=int, metavar='ST',
                             help='the number of optimization steps to perform one cosine cycle')
-        parser.add_argument('--start-ensemble-training-cycle', default=1000000, type=int, metavar='EN',
-                            help='from which cycle to conduct kd training, default is 1000000 (essentially no kd training)')
 
     def step(self, epoch, val_loss=None):
         """Update the learning rate at the end of the given epoch."""

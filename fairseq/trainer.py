@@ -62,6 +62,8 @@ class Trainer(object):
         self._optimizer = None
 
         self.prev_teacher_models = None #used as the models to perform kd training
+        self.prev_teacher_val_losses = OrderedDict()
+        self.kd_teacher_weights = None
 
 
     @property
@@ -197,12 +199,12 @@ class Trainer(object):
             teacher_outputs = None
             if self.prev_teacher_models: #conduct joint kd and ce loss training
                 net_outputs = []
-                for (model_name, model) in self.prev_teacher_models.items():
+                for idx, (model_name, model) in enumerate(self.prev_teacher_models.items()):
                     model.eval()
                     with torch.no_grad():
-                        net_outputs.append(model(**sample['net_input'])[0])
+                        net_outputs.append(self.kd_teacher_weights[idx] * model(**sample['net_input'])[0])
                 teacher_outputs = sum(net_outputs)
-                teacher_outputs /= len(self.prev_teacher_models)
+                #teacher_outputs /= len(self.prev_teacher_models)
             try:
                 with torch.no_grad() if eval else contextlib.ExitStack():
                     # calculate loss and sample size

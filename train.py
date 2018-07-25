@@ -11,6 +11,7 @@ import itertools
 import os
 import math
 import torch
+import math
 
 from fairseq import data, distributed_utils, options, tasks, utils
 from fairseq.fp16_trainer import FP16Trainer
@@ -151,12 +152,13 @@ def train(args, trainer, task, epoch_itr):
             save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
         is_cosine_sharpness = args.lr_scheduler == 'cosine' and trainer.is_cosine_local_sharpness()
-        if is_cosine_sharpness and trainer.get_cosine_cyle() >= args.start_ensemble_training_cycle:
-            trainer.prev_teacher_models = prepare_cycle_kd_models(args, trainer, task)
 
         if is_cosine_sharpness:
             valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
             save_cosine_sharp_checkpoint(args, trainer, epoch_itr, valid_losses[0])
+
+        if is_cosine_sharpness and trainer.get_cosine_cyle() >= args.start_ensemble_training_cycle:
+            trainer.prev_teacher_models, trainer.kd_teacher_weights = prepare_cycle_kd_models(args, trainer, task)
 
         if num_updates >= max_update:
             break
@@ -283,9 +285,11 @@ def save_cosine_sharp_checkpoint(args, trainer, epoch_itr, val_loss):
         'train_iterator': epoch_itr.state_dict(),
         'val_loss': val_loss,
     }
-
-    checkpoint = os.path.join(args.save_dir, 'checkpoint_cycle_{}.pt'.format(trainer.get_cosine_cyle()))
+    ckpt_name = 'checkpoint_cycle_{}.pt'.format(trainer.get_cosine_cyle())
+    checkpoint = os.path.join(args.save_dir, ckpt_name)
     trainer.save_checkpoint(checkpoint, extra_state)
+    trainer.prev_teacher_val_losses[ckpt_name] = val_loss
+    print(trainer.prev_teacher_val_losses)
 
 def save_checkpoint(args, trainer, epoch_itr, val_loss):
     if args.no_save or not distributed_utils.is_master(args):
@@ -364,16 +368,30 @@ def load_dataset_splits(args, task, splits):
 
 def prepare_cycle_kd_models(args, trainer, task):
     teacher_models = {}
+    teacher_weights = []
     curr_cycle = trainer.get_cosine_cyle()
-    print('Begin to load previous {} sharp ckpts'.format(curr_cycle))
-    for cycle_idx in range(curr_cycle):
+    print('Begin to load previous {} sharp ckpts'.format(args.teachers_cnt))
+
+    met_unknown_ckpt = False
+    for cycle_idx in range(curr_cycle - args.teachers_cnt, curr_cycle):
         model = task.build_model(args)
-        checkpoint_path = os.path.join(args.save_dir, 'checkpoint_cycle_{}.pt'.format(cycle_idx))
+        ckpt_name = 'checkpoint_cycle_{}.pt'.format(cycle_idx)
+        checkpoint_path = os.path.join(args.save_dir, ckpt_name)
         utils.load_model_state(checkpoint_path, model)
         model.cuda()
-        teacher_models['checkpoint_cycle_{}'.format(cycle_idx)] = model
-    print('Done')
-    return teacher_models
+        teacher_models[ckpt_name] = model
+        if ckpt_name not in trainer.prev_teacher_val_losses:
+            met_unknown_ckpt = True
+        else:
+            teacher_weights.append(-trainer.prev_teacher_val_losses[ckpt_name])
+    if met_unknown_ckpt:
+        teacher_weights = [1.0 / args.teachers_cnt for _ in range(args.teachers_cnt)]
+    else:
+        teacher_weights = [x - max(teacher_weights) for x in teacher_weights]
+        teacher_weights_exp = [math.exp(x) for x in teacher_weights]
+        teacher_weights = [x / sum(teacher_weights_exp) for x in teacher_weights_exp]
+    print(teacher_weights, 'Done')
+    return teacher_models, teacher_weights
 
 if __name__ == '__main__':
     parser = options.get_training_parser()

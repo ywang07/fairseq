@@ -1,1 +1,1 @@
-python generate.py /home/fetia/fairseq/data-bin/wmt14_en_de_joined_dict --path /home/fetia/ckpts/transformer/WMT14_ENDE/$1/checkpoint_$2.pt --batch-size 128 --beam 5 --lenpen $3 --quiet --remove-bpe
+python generate.py /home/fetia/fairseq/data-bin/wmt14_en_de_joined_dict --path /home/fetia/ckpts/transformer/WMT14_ENDE/$1/checkpoint$2.pt --batch-size 128 --beam 5 --lenpen $3 --quiet --remove-bpe

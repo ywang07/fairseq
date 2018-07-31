@@ -1,7 +1,6 @@
 from generate import main as single_model_main
 
 import os, sys, subprocess
-import time
 import re
 from fairseq import options
 
@@ -40,7 +39,7 @@ def main(args):
         if bleu_match:
             bleu_score = bleu_match.group(1)
             print(ckpt_file, bleu_score)
-        time.sleep(15)
+            sys.stdout.flush()
 
 if __name__ == '__main__':
     parser = options.get_generation_parser(seq=True)

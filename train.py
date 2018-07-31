@@ -9,9 +9,10 @@
 import collections
 import itertools
 import os
-import math
+import sys
 import torch
 import math
+
 
 from fairseq import data, distributed_utils, options, tasks, utils
 from fairseq.fp16_trainer import FP16Trainer
@@ -391,6 +392,7 @@ def prepare_cycle_kd_models(args, trainer, task):
         teacher_weights_exp = [math.exp(x) for x in teacher_weights]
         teacher_weights = [x / sum(teacher_weights_exp) for x in teacher_weights_exp]
     print(teacher_weights, 'Done')
+    sys.stdout.flush()
     return teacher_models, teacher_weights
 
 if __name__ == '__main__':

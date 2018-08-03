@@ -30,11 +30,10 @@ def main(args):
         #Note here, simply calling single_model_main will bring mysterious memory error, so use bruteforce calling instead
         #single_model_main(args)
         pl_process = subprocess.Popen(
-            'python generate.py {} --path {}'.format(obtain_sys_argv(), ckpt_file),
+            'python /hdfs/sdrgvc/fetia/fairseq/generate.py {} --path {}'.format(obtain_sys_argv(), ckpt_file),
             shell=True,
             stdout=subprocess.PIPE)
         pl_output = pl_process.stdout.read()
-        print(type(pl_output), str(pl_output))
         bleu_match = re.search(bleu_ptn, str(pl_output))
         if bleu_match:
             bleu_score = bleu_match.group(1)

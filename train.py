@@ -158,8 +158,10 @@ def train(args, trainer, task, epoch_itr):
             valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
             save_cosine_sharp_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
-        if is_cosine_sharpness and trainer.get_cosine_cyle() >= args.start_ensemble_training_cycle:
+        kd_cycle_index = trainer.get_cosine_cyle() - args.start_ensemble_training_cycle
+        if is_cosine_sharpness and kd_cycle_index >= 0:
             trainer.prev_teacher_models, trainer.kd_teacher_weights = prepare_cycle_kd_models(args, trainer, task)
+            trainer.increase_kd_trade_off(times = kd_cycle_index)
 
         if num_updates >= max_update:
             break

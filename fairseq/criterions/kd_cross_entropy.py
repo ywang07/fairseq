@@ -21,8 +21,10 @@ class KnowledgeDistillationCrossEntropyCriterion(FairseqCriterion):
     def __init__(self, args, task):
         super().__init__(args, task)
         self.T = args.kd_temperature
-        self.alpha = args.kd_trade_off
+        self.base_alpha = args.kd_trade_off
+        self.alpha = self.base_alpha
         self.eps = args.label_smoothing
+        self.alpha_delta = args.kd_trade_off_delta
         assert args.lr_scheduler == 'cosine'
         assert args.start_ensemble_training_cycle >= args.teachers_cnt
 
@@ -37,6 +39,8 @@ class KnowledgeDistillationCrossEntropyCriterion(FairseqCriterion):
                             help='the number of teacher models to conduct kd training')
         parser.add_argument('--start-ensemble-training-cycle', default=1000000, type=int, metavar='NUM',
                             help='from which cycle to conduct kd training, default is 1000000 (essentially no kd training)')
+        parser.add_argument('--kd-trade-off-delta', default=0., type=float, metavar='D',
+                            help='the delta to improve over self.alpha in each kd cycle')
         parser.add_argument('--label-smoothing', default=0., type=float, metavar='D',
                             help='epsilon for label smoothing, 0 means no label smoothing')
 
@@ -98,3 +102,9 @@ class KnowledgeDistillationCrossEntropyCriterion(FairseqCriterion):
             'nll_loss': sum(log.get('nll_loss', 0) for log in logging_outputs) / ntokens / math.log(2),
             'sample_size': sample_size,
         }
+
+    def increase_kd_trade_off(self, times):
+        prev_alpha = self.alpha
+        self.alpha = min(1.0, self.base_alpha + self.alpha_delta * times)
+        if self.alpha > prev_alpha:
+            print('Improve the kd_tradeoff from {} to {}'.format(prev_alpha, self.alpha))

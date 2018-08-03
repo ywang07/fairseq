@@ -365,6 +365,9 @@ class Trainer(object):
         next_cycle = self.lr_scheduler.cosine_cycle(self._num_updates + 1)
         return  curr_cycle != -1 and curr_cycle + 1 == next_cycle
 
+    def increase_kd_trade_off(self, times):
+        self.criterion.increase_kd_trade_off(times)
+
     def _prepare_sample(self, sample):
         if sample is None or len(sample) == 0:
             return None

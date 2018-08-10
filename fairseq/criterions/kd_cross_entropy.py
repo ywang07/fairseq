@@ -26,7 +26,7 @@ class KnowledgeDistillationCrossEntropyCriterion(FairseqCriterion):
         self.eps = args.label_smoothing
         self.alpha_delta = args.kd_trade_off_delta
         assert args.lr_scheduler == 'cosine'
-        assert args.start_ensemble_training_cycle >= args.teachers_cnt
+        assert args.start_ensemble_training_cycle >= args.teachers_cnt - 1
 
     @staticmethod
     def add_args(parser):

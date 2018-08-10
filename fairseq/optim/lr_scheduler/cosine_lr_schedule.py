@@ -80,5 +80,5 @@ class CosineSchedule(FairseqLRScheduler):
     def cosine_cycle(self, num_updates):
         if num_updates <= self.args.warmup_updates:
             return -1
-        return (int)((num_updates - self.args.warmup_updates) / self.args.cosine_cycle_steps)
+        return (num_updates - self.args.warmup_updates) // self.args.cosine_cycle_steps
 

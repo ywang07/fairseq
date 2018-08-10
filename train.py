@@ -158,10 +158,10 @@ def train(args, trainer, task, epoch_itr):
             valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
             save_cosine_sharp_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
-        kd_cycle_index = trainer.get_cosine_cyle() - args.start_ensemble_training_cycle
-        if is_cosine_sharpness and kd_cycle_index >= 0:
+        kd_cycle_index_gap = trainer.get_cosine_cyle() - args.start_ensemble_training_cycle
+        if  kd_cycle_index_gap >= 0 and (is_cosine_sharpness or trainer.prev_teacher_models is None) :
             trainer.prev_teacher_models, trainer.kd_teacher_weights = prepare_cycle_kd_models(args, trainer, task)
-            trainer.increase_kd_trade_off(times = kd_cycle_index)
+            trainer.increase_kd_trade_off(times = kd_cycle_index_gap)
 
         if num_updates >= max_update:
             break
@@ -280,6 +280,8 @@ def get_perplexity(loss):
         return float('inf')
 
 def save_cosine_sharp_checkpoint(args, trainer, epoch_itr, val_loss):
+    if args.no_save or not distributed_utils.is_master(args):
+        return
     prev_best = getattr(save_checkpoint, 'best', val_loss)
     if val_loss is not None:
         save_checkpoint.best = min(val_loss, prev_best)

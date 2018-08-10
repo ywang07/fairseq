@@ -28,8 +28,10 @@ ARCH=transformer_iwslt_de_en_L6
 CYCLE_STEP=${3:-12000}
 TEMPERATURE=${4:-1.0}
 TRADEOFF=${5:-0.5}
+TRADEOFF_DELTA=${6:-0.0}
+START_KD_CYCLE=${7:-3}
 
-SETTING=cycle${CYCLE_STEP}_T${TEMPERATURE}_tradeoff${TRADEOFF}
+SETTING=cycle${CYCLE_STEP}_T${TEMPERATURE}_tradeoff${TRADEOFF}_D${TRADEOFF_DELTA}_startcycle${START_KD_CYCLE}
 
 
 CODE_PATH=/hdfs/msrmt/fetia/fairseq
@@ -48,7 +50,7 @@ CUDA_VISIBLE_DEVICES=0 python ${CODE_PATH}/train.py ${REMOTE_DATA_PATH}/iwslt14.
   --lr-scheduler cosine  --cosine-cycle-steps ${CYCLE_STEP} --warmup-init-lr 1e-07 --warmup-updates 4000 \
   --lr 0.001 --min-lr 1e-09  \
   --weight-decay 0.0 --criterion kd_cross_entropy --label-smoothing 0.1 \
-  --kd-trade-off ${TRADEOFF} --start-ensemble-training-cycle 3 --teachers-cnt 3 --kd-temperature ${TEMPERATURE} \
+  --kd-trade-off ${TRADEOFF} --start-ensemble-training-cycle ${START_KD_CYCLE} --teachers-cnt 3 --kd-temperature ${TEMPERATURE} --kd-trade-off-delta ${TRADEOFF_DELTA} \
   --max-tokens 4096 --no-progress-bar --save-dir ${REMOTE_MODEL_PATH}/$model/$PROBLEM/${ARCH}_${SETTING} | tee ${CODE_PATH}/log/${model}_${PROBLEM}_${ARCH}_${SETTING}.txt
    
 

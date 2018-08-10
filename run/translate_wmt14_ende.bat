@@ -1,1 +1,0 @@
-python ../seq_translate.py ..\..\Data_Models\NMT\wmt14_en_de_joined_dict --ckpt-dir F:\Data_Models\NMT\ckpts\WMT14_EN_DE --batch-size 128 --beam 4 --lenpen 0.6 --quiet --remove-bpe --no-progress-bar

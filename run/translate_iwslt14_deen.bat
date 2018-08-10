@@ -1,1 +1,0 @@
-python generate.py F:\Data_Models\NMT\iwslt14.tokenized.de-en --path ..\..\..\..\Data_Models\NMT\ckpts\IWSLT14_DE_EN_UP8\checkpoint_best.pt --batch-size 128 --beam 5 --lenpen 1.2 --quiet --remove-bpe --no-progress-bar
